@@ -1,0 +1,7 @@
+Flask
+Flask-SocketIO
+Flask-Cors
+gunicorn
+flask-jwt-extended
+flask-bcrypt
+eventlet

@@ -10,7 +10,7 @@ DB_PATH = os.path.join(BASE_DIR, 'instance', 'database.db')
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-# Use environment variables in production to override these
+# Use env var for production SECRET_KEY
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
 
 bcrypt = Bcrypt(app)
@@ -21,7 +21,10 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
+def init_db(force_recreate=False):
+    # force_recreate: delete existing DB to ensure clean state (for distributed downloads)
+    if force_recreate and os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
     conn = get_db()
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -48,7 +51,8 @@ def init_db():
         conn.commit()
     conn.close()
 
-init_db()
+# ensure clean DB for distributed package (recreate always)
+init_db(force_recreate=True)
 
 @app.before_request
 def load_user():
@@ -96,7 +100,10 @@ def login():
     c.execute('SELECT id,username,password FROM users WHERE username=?', (username,))
     row = c.fetchone()
     conn.close()
-    if not row or not bcrypt.check_password_hash(row['password'], password):
+    if not row:
+        return render_template('login.html', error='Credenciais inválidas')
+    # row['password'] is the hashed password (string)
+    if not bcrypt.check_password_hash(row['password'], password):
         return render_template('login.html', error='Credenciais inválidas')
     session['user_id'] = row['id']
     return redirect(url_for('chat'))
@@ -124,15 +131,14 @@ def api_messages():
     rows = c.fetchall(); conn.close()
     return jsonify([dict(r) for r in reversed(rows)])
 
-# Socket handlers
 @socketio.on('send_message')
 def handle_send_message(data):
     try:
-        text = data.get('message','').strip()
+        text = (data.get('message') or '').strip()
         if not text:
             return
         user_id = int(data.get('user_id')) if data.get('user_id') else None
-        username = data.get('username','Anon')
+        username = data.get('username') or 'Anon'
         ts = datetime.datetime.utcnow().isoformat()
         conn = get_db(); c = conn.cursor()
         c.execute('INSERT INTO messages (user_id,username,message,timestamp) VALUES (?,?,?,?)',

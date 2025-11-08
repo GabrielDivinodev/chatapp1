@@ -1,9 +1,13 @@
-# Chat Global - Ready for Local & Render
+# Chat Global - Eventlet-ready (Flask + SocketIO + SQLite)
 
-Projeto pronto: chat global em tempo real com Flask + SocketIO + SQLite.
+### Features
+- Login & register using bcrypt (secure hashing)
+- Global real-time chat using Flask-SocketIO with eventlet
+- SQLite database auto-initialized (includes alice/bob users)
+- Procfile and requirements for Render deployment
 
-## Rodar localmente
-1. Crie e ative venv:
+### Run locally
+1. Create venv and activate
    ```bash
    python -m venv venv
    # Windows (PowerShell)
@@ -13,19 +17,17 @@ Projeto pronto: chat global em tempo real com Flask + SocketIO + SQLite.
    # macOS / Linux
    source venv/bin/activate
    ```
-2. Instale dependências:
+2. Install deps
    ```bash
    pip install -r requirements.txt
    ```
-3. Rode:
+3. Run
    ```bash
    python app.py
    ```
-4. Abra http://localhost:5000
-Usuários de teste: alice / password123  e  bob / password123
+4. Open http://localhost:5000
+Users: alice / password123  and  bob / password123
 
-## Deploy no Render
-- Conecte seu repositório no Render e use:
-  - Build command: `pip install -r requirements.txt`
-  - Start command: `gunicorn -k eventlet -w 1 app:app`
-- Ou use o `Procfile` incluído.
+### Deploy on Render
+- Build: `pip install -r requirements.txt`
+- Start: `gunicorn -k eventlet -w 1 app:app`

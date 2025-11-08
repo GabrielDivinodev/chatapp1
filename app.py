@@ -1,14 +1,18 @@
+import os
+import sqlite3
+import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, g, jsonify
 from flask_bcrypt import Bcrypt
-from flask_socketio import SocketIO, emit
-import sqlite3, os, datetime
+from flask_socketio import SocketIO
 
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, 'instance', 'database.db')
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.config['SECRET_KEY'] = 'replace-this-with-a-secure-key'
+# Use environment variables in production to override these
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
+
 bcrypt = Bcrypt(app)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
 
@@ -34,7 +38,6 @@ def init_db():
         timestamp TEXT NOT NULL
     )''')
     conn.commit()
-    # create sample users if none
     c.execute('SELECT COUNT(*) as cnt FROM users')
     if c.fetchone()['cnt'] == 0:
         pw = bcrypt.generate_password_hash('password123').decode('utf-8')
@@ -47,19 +50,18 @@ def init_db():
 
 init_db()
 
-# --- Helpers ---
 @app.before_request
 def load_user():
     g.user = None
-    if 'user_id' in session:
+    user_id = session.get('user_id')
+    if user_id:
         conn = get_db(); c = conn.cursor()
-        c.execute('SELECT id,username FROM users WHERE id=?', (session['user_id'],))
+        c.execute('SELECT id,username FROM users WHERE id=?', (user_id,))
         row = c.fetchone()
         conn.close()
         if row:
             g.user = {'id': row['id'], 'username': row['username']}
 
-# --- Routes ---
 @app.route('/')
 def index():
     if g.user:
@@ -88,10 +90,10 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    email_or_user = request.form.get('username','').strip()
+    username = request.form.get('username','').strip()
     password = request.form.get('password','')
     conn = get_db(); c = conn.cursor()
-    c.execute('SELECT id,username,password FROM users WHERE username=?', (email_or_user,))
+    c.execute('SELECT id,username,password FROM users WHERE username=?', (username,))
     row = c.fetchone()
     conn.close()
     if not row or not bcrypt.check_password_hash(row['password'], password):
@@ -108,7 +110,6 @@ def logout():
 def chat():
     if not g.user:
         return redirect(url_for('index'))
-    # load last 100 messages
     conn = get_db(); c = conn.cursor()
     c.execute('SELECT id,user_id,username,message,timestamp FROM messages ORDER BY id DESC LIMIT 100')
     rows = c.fetchall()
@@ -123,30 +124,27 @@ def api_messages():
     rows = c.fetchall(); conn.close()
     return jsonify([dict(r) for r in reversed(rows)])
 
-# --- SocketIO events ---
-@socketio.on('connect')
-def on_connect():
-    # nothing special on connect for global chat
-    pass
-
+# Socket handlers
 @socketio.on('send_message')
 def handle_send_message(data):
-    text = data.get('message','').strip()
-    if not text:
-        return
-    user_id = data.get('user_id')
-    username = data.get('username','Anon')
-    ts = datetime.datetime.utcnow().isoformat()
-    conn = get_db(); c = conn.cursor()
-    c.execute('INSERT INTO messages (user_id,username,message,timestamp) VALUES (?,?,?,?)',
-              (user_id, username, text, ts))
-    conn.commit()
-    mid = c.lastrowid
-    conn.close()
-    payload = {'id': mid, 'user_id': user_id, 'username': username, 'message': text, 'timestamp': ts}
-    emit('new_message', payload, broadcast=True)
+    try:
+        text = data.get('message','').strip()
+        if not text:
+            return
+        user_id = int(data.get('user_id')) if data.get('user_id') else None
+        username = data.get('username','Anon')
+        ts = datetime.datetime.utcnow().isoformat()
+        conn = get_db(); c = conn.cursor()
+        c.execute('INSERT INTO messages (user_id,username,message,timestamp) VALUES (?,?,?,?)',
+                  (user_id, username, text, ts))
+        conn.commit()
+        mid = c.lastrowid
+        conn.close()
+        payload = {'id': mid, 'user_id': user_id, 'username': username, 'message': text, 'timestamp': ts}
+        socketio.emit('new_message', payload, broadcast=True)
+    except Exception as e:
+        print('Error in send_message:', e)
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port)

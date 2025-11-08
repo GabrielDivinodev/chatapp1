@@ -10,7 +10,6 @@ DB_PATH = os.path.join(BASE_DIR, 'instance', 'database.db')
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-# Use env var for production SECRET_KEY
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
 
 bcrypt = Bcrypt(app)
@@ -22,7 +21,6 @@ def get_db():
     return conn
 
 def init_db(force_recreate=False):
-    # force_recreate: delete existing DB to ensure clean state (for distributed downloads)
     if force_recreate and os.path.exists(DB_PATH):
         os.remove(DB_PATH)
     conn = get_db()
@@ -51,7 +49,7 @@ def init_db(force_recreate=False):
         conn.commit()
     conn.close()
 
-# ensure clean DB for distributed package (recreate always)
+# recreate DB for distributed package so example users always present
 init_db(force_recreate=True)
 
 @app.before_request
@@ -100,12 +98,10 @@ def login():
     c.execute('SELECT id,username,password FROM users WHERE username=?', (username,))
     row = c.fetchone()
     conn.close()
-    if not row:
-        return render_template('login.html', error='Credenciais inválidas')
-    # row['password'] is the hashed password (string)
-    if not bcrypt.check_password_hash(row['password'], password):
+    if not row or not bcrypt.check_password_hash(row['password'], password):
         return render_template('login.html', error='Credenciais inválidas')
     session['user_id'] = row['id']
+    session['username'] = row['username']
     return redirect(url_for('chat'))
 
 @app.route('/logout')
@@ -118,7 +114,7 @@ def chat():
     if not g.user:
         return redirect(url_for('index'))
     conn = get_db(); c = conn.cursor()
-    c.execute('SELECT id,user_id,username,message,timestamp FROM messages ORDER BY id DESC LIMIT 100')
+    c.execute('SELECT id,user_id,username,message,timestamp FROM messages ORDER BY id DESC LIMIT 200')
     rows = c.fetchall()
     conn.close()
     messages = [dict(r) for r in reversed(rows)]

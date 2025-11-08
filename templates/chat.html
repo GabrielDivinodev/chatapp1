@@ -1,7 +1,9 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat Global</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat Global</title>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="chat-page">
@@ -15,16 +17,16 @@
     </aside>
     <main class="main">
       <div class="chat-header">Sala pública</div>
-      <div id="messages" class="messages">
+      <div id="messages" class="messages" role="log" aria-live="polite">
         {% for m in messages %}
-          <div class="message {{ 'me' if m.user_id==user.id else 'other' }}">
+          <div class="message {{ 'self' if m.user_id==user.id else 'other' }}">
             <div class="meta"><strong>{{ m.username }}</strong> <span class="time">{{ m.timestamp }}</span></div>
             <div class="text">{{ m.message }}</div>
           </div>
         {% endfor %}
       </div>
       <div class="composer">
-        <input id="inputMessage" placeholder="Digite uma mensagem..." />
+        <input id="inputMessage" placeholder="Digite uma mensagem..." aria-label="Mensagem" />
         <button id="sendBtn">Enviar</button>
       </div>
     </main>
@@ -33,24 +35,43 @@
 <script>
 const socket = io();
 const user = { id: {{ user.id }}, username: "{{ user.username }}" };
-function addMessage(m){
-  const cont = document.getElementById('messages');
+
+function createMessageElement(m){
   const el = document.createElement('div');
-  el.className = 'message ' + (m.user_id === user.id ? 'me' : 'other');
-  el.innerHTML = `<div class="meta"><strong>${m.username}</strong> <span class="time">${new Date(m.timestamp).toLocaleString()}</span></div><div class="text">${m.message}</div>`;
-  cont.appendChild(el);
+  el.className = 'message ' + (m.user_id === user.id ? 'self' : 'other');
+  el.innerHTML = `<div class="meta"><strong>${escapeHTML(m.username)}</strong> <span class="time">${new Date(m.timestamp).toLocaleString()}</span></div><div class="text">${escapeHTML(m.message)}</div>`;
+  return el;
+}
+
+function escapeHTML(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function scrollToBottom(){
+  const cont = document.getElementById('messages');
   cont.scrollTop = cont.scrollHeight;
 }
-socket.on('connect', ()=>{ console.log('connected'); });
-socket.on('new_message', (m)=>{ addMessage(m); });
+
+socket.on('connect', ()=>{ console.log('socket connected'); });
+
+socket.on('new_message', (m)=>{
+  const cont = document.getElementById('messages');
+  cont.appendChild(createMessageElement(m));
+  scrollToBottom();
+});
+
 document.getElementById('sendBtn').addEventListener('click', sendMessage);
 document.getElementById('inputMessage').addEventListener('keydown', (e)=>{ if(e.key==='Enter') sendMessage(); });
+
 function sendMessage(){
   const text = document.getElementById('inputMessage').value.trim();
   if(!text) return;
+  // emit message with user id & username so server can store/display
   socket.emit('send_message', { user_id: user.id, username: user.username, message: text });
   document.getElementById('inputMessage').value='';
+  document.getElementById('inputMessage').focus();
 }
+
+window.addEventListener('load', ()=>{ scrollToBottom(); document.getElementById('inputMessage').focus(); });
+
 </script>
 </body>
 </html>

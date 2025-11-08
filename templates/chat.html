@@ -1,31 +1,56 @@
 <!doctype html>
-<html>
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <title>Chat - ChatApp</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/static/css/style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat Global</title>
+<link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="chat-page">
   <div class="app">
     <aside class="sidebar">
       <div class="sidebar-top">
-        <h3>ChatApp</h3>
-        <button id="logoutBtn">Logout</button>
+        <h3>Chat Global</h3>
+        <div>Usuário: <strong>{{ user.username }}</strong></div>
+        <a href="/logout" class="btn">Logout</a>
       </div>
-      <div class="contacts" id="contacts"></div>
     </aside>
     <main class="main">
-      <div class="chat-header" id="chatHeader">Selecione um contato</div>
-      <div class="messages" id="messages"></div>
+      <div class="chat-header">Sala pública</div>
+      <div id="messages" class="messages">
+        {% for m in messages %}
+          <div class="message {{ 'me' if m.user_id==user.id else 'other' }}">
+            <div class="meta"><strong>{{ m.username }}</strong> <span class="time">{{ m.timestamp }}</span></div>
+            <div class="text">{{ m.message }}</div>
+          </div>
+        {% endfor %}
+      </div>
       <div class="composer">
         <input id="inputMessage" placeholder="Digite uma mensagem..." />
         <button id="sendBtn">Enviar</button>
       </div>
     </main>
   </div>
-
 <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-<script src="/static/js/chat.js"></script>
+<script>
+const socket = io();
+const user = { id: {{ user.id }}, username: "{{ user.username }}" };
+function addMessage(m){
+  const cont = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'message ' + (m.user_id === user.id ? 'me' : 'other');
+  el.innerHTML = `<div class="meta"><strong>${m.username}</strong> <span class="time">${new Date(m.timestamp).toLocaleString()}</span></div><div class="text">${m.message}</div>`;
+  cont.appendChild(el);
+  cont.scrollTop = cont.scrollHeight;
+}
+socket.on('connect', ()=>{ console.log('connected'); });
+socket.on('new_message', (m)=>{ addMessage(m); });
+document.getElementById('sendBtn').addEventListener('click', sendMessage);
+document.getElementById('inputMessage').addEventListener('keydown', (e)=>{ if(e.key==='Enter') sendMessage(); });
+function sendMessage(){
+  const text = document.getElementById('inputMessage').value.trim();
+  if(!text) return;
+  socket.emit('send_message', { user_id: user.id, username: user.username, message: text });
+  document.getElementById('inputMessage').value='';
+}
+</script>
 </body>
 </html>

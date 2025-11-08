@@ -1,20 +1,21 @@
 <!doctype html>
-<html>
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <title>Login - ChatApp</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/static/css/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login - Chat Global</title>
+<link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="auth-page">
   <div class="card auth-card">
     <h2>Entrar</h2>
-    <input id="email" placeholder="Email" type="email" />
-    <input id="password" placeholder="Senha" type="password" />
-    <button id="btnLogin">Entrar</button>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      <input name="username" placeholder="Nome de usuário" required />
+      <input name="password" type="password" placeholder="Senha" required />
+      <button type="submit">Entrar</button>
+    </form>
     <p>ou <a href="/register">Registrar</a></p>
-    <div id="msg" class="msg"></div>
   </div>
-<script src="/static/js/auth.js"></script>
 </body>
 </html>
